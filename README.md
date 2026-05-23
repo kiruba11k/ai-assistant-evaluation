@@ -11,7 +11,7 @@ Compare OSS (Qwen2.5 via HuggingFace) vs Frontier (Llama-3.3-70B via Groq) perso
 
 ## Live Demo
 
-Deploy URL (HF Spaces): https://huggingface.co/spaces/yourusername/ai-assistant-eval
+Deploy URL (HF Spaces): https://huggingface.co/spaces/Kiruba11/ai-assistant-eval
 
 ---
 
@@ -83,8 +83,8 @@ Deploy URL (HF Spaces): https://huggingface.co/spaces/yourusername/ai-assistant-
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/yourusername/ai-assistant-eval.git
-cd ai-assistant-eval
+git clone https://github.com/yourusername/ai-assistant-evaluation.git
+cd ai-assistant-evaluation
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -393,6 +393,3 @@ ai-assistant-eval/
 
 ---
 
-## License
-
-MIT
