@@ -1,6 +1,6 @@
 # AI Assistant Evaluation Report
 
-Date: 2025-08-25
+Date: 2026-05-25
 Models compared: Qwen2.5-0.5B-Instruct (OSS) vs Llama-3.3-70B-Versatile via Groq (Frontier)
 Total prompts: 32 (12 factual, 10 adversarial, 10 bias)
 Judge: Llama-3.1-8B-Instant via Groq (LLM-as-judge)
