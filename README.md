@@ -1,6 +1,6 @@
 # AI Assistant Evaluation Suite
 
-Compare OSS (Qwen2.5 via HuggingFace) vs Frontier (Llama-3.3-70B via Groq) personal assistants across factual accuracy, safety, and bias — with a full evaluation framework, observability, and guardrails. Both models run on free APIs.
+Compare OSS (Qwen2.5 locally) vs Frontier (Llama-3.3-70B via Groq) personal assistants across factual accuracy, safety, and bias  with a full evaluation framework, observability, and guardrails. The OSS model runs locally inside Hugging Face Spaces using Transformers, while the Frontier model uses the Groq API free tier.
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![Gradio](https://img.shields.io/badge/UI-Gradio-orange.svg)
@@ -36,8 +36,8 @@ Deploy URL (HF Spaces): https://huggingface.co/spaces/Kiruba11/ai-assistant-eval
        | OSSAssistant   |   | FrontierAssistant   |
        |                |   |                     |
        | Qwen2.5 via    |   | Llama-3.3-70B via   |
-       | HF Inference   |   | Groq API            |
-       | API (free)     |   | (free)              |
+       | Locally        |   | Groq API            |
+       |                |   | (free)              |
        +----------------+   +---------------------+
               |                     |
        +------v---------------------v------+
@@ -83,7 +83,7 @@ Deploy URL (HF Spaces): https://huggingface.co/spaces/Kiruba11/ai-assistant-eval
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/yourusername/ai-assistant-evaluation.git
+git clone https://github.com/kiruba11k/ai-assistant-evaluation.git
 cd ai-assistant-evaluation
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -95,7 +95,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and add your two free API keys:
 #   GROQ_API_KEY=gsk_...        (from console.groq.com)
-#   HF_API_TOKEN=hf_...         (from huggingface.co/settings/tokens)
+#   HF_TOKEN=hf_...         (from huggingface.co/settings/tokens)
 ```
 
 ### 3. Run the App
@@ -230,8 +230,8 @@ Stage 2 (LLM judge, ~200ms): Llama-3.1-8B-Instant via Groq
 ### Observability
 
 All turns logged to:
-- logs/conversations.jsonl — one JSON record per turn, grep-friendly
-- logs/metrics.db — SQLite with per-session counters and latency stats
+- logs/conversations.jsonl  one JSON record per turn, grep-friendly
+- logs/metrics.db  SQLite with per-session counters and latency stats
 
 Example query:
 ```bash
@@ -279,24 +279,24 @@ evaluation/results/
 
 ## Cost and Latency
 
-| Metric                 | OSS (Qwen2.5-0.5B / HF)  | Frontier (Llama-3.3-70B / Groq) |
-|------------------------|--------------------------|----------------------------------|
-| Input cost             | $0 (HF free tier)        | $0 (Groq free tier)              |
-| Output cost            | $0 (HF free tier)        | $0 (Groq free tier)              |
-| Cold-start latency     | 10-30 seconds            | Under 1 second                   |
-| Warm P50 latency       | 1-5 seconds              | 0.2-0.5 seconds                  |
-| Warm P95 latency       | 5-15 seconds             | 0.5-1.5 seconds                  |
-| Max context            | 4,096 tokens             | 32,768 tokens                    |
-| Throughput             | 50-200 tok/s             | 200-800 tok/s                    |
-| Privacy                | HF servers               | Groq servers                     |
-| Customization          | Fine-tuning possible     | System prompt only               |
+| Metric                    | OSS (Qwen2.5-0.5B / Local HF Space) | Frontier (Llama-3.3-70B / Groq) |
+|---------------------------|--------------------------------------|----------------------------------|
+| Input cost                | $0 (HF Space local inference)        | $0 (Groq free tier)              |
+| Output cost               | $0 (HF Space local inference)        | $0 (Groq free tier)              |
+| Cold-start latency        | 15-40 seconds                        | Under 1 second                   |
+| Warm P50 latency          | 8-15 seconds                         | 0.2-0.5 seconds                  |
+| Warm P95 latency          | 15-30 seconds                        | 0.5-1.5 seconds                  |
+| Max context               | 4,096 tokens                         | 32,768 tokens                    |
+| Throughput                | 10-40 tok/s                          | 200-800 tok/s                    |
+| Privacy                   | Local HF Space runtime               | Groq servers                     |
+| Customization             | Full fine-tuning possible            | System prompt only               |
 
 ---
 
 ## Architecture Decisions
 
 ### Why HuggingFace Inference API instead of local inference?
-Running Qwen2.5-0.5B locally requires a machine with adequate RAM and GPU. The HF Inference API lets anyone reproduce this project with only a free HF token. The 0.5B model size is deliberate — it fits within the free-tier serverless quota with no waitlist.
+Running Qwen2.5-0.5B locally requires a machine with adequate RAM and GPU. The HF Inference API lets anyone reproduce this project with only a free HF token. The 0.5B model size is deliberate  it fits within the free-tier serverless quota with no waitlist.
 
 ### Why Groq instead of OpenAI or Anthropic for the Frontier model?
 Groq is the only major inference provider with a genuinely generous free tier at this scale (100K-500K tokens/day). Llama-3.3-70B on Groq also has the fastest inference latency of any public API (~200ms P50), which makes the head-to-head comparison more dramatic and practically relevant.
@@ -305,7 +305,7 @@ Groq is the only major inference provider with a genuinely generous free tier at
 Gradio provides a complete UI with chat history, state management, and tabs in roughly 100 lines of code and deploys natively to HF Spaces in the same repository. For a production app with custom branding, a dedicated React frontend plus FastAPI backend would be preferred.
 
 ### Why SQLite for observability instead of a hosted service?
-Zero external dependencies — runs out of the box on any machine. The schema is compatible with common BI tools (Metabase, Grafana with the SQLite plugin). In production, swap for PostgreSQL or ship JSONL logs to Datadog or OpenTelemetry.
+Zero external dependencies  runs out of the box on any machine. The schema is compatible with common BI tools (Metabase, Grafana with the SQLite plugin). In production, swap for PostgreSQL or ship JSONL logs to Datadog or OpenTelemetry.
 
 ### Why Llama-3.1-8B-Instant for the LLM judge?
 It is the fastest and most rate-limit-friendly model on Groq free tier (500K tokens/day). For structured JSON classification tasks like safety scoring, 8B parameters is sufficient. Using the 70B model for judging would exhaust the daily limit quickly during batch evaluation.
