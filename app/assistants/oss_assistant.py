@@ -3,122 +3,115 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-import requests
+import torch
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+)
 
 from app.assistants.base import BaseAssistant
 from app.config import config
 
 
 class OSSAssistant(BaseAssistant):
-    """
-    Personal assistant powered by Qwen2.5 (or any HF-hosted chat model).
-
-    Architecture
-    ------------
-    - Inference: HuggingFace Inference API (serverless, free tier)
-    - Memory:    Sliding-window conversation history (inherited from BaseAssistant)
-    - Tools:     Heuristic pre-check + result injection (inherited)
-    - Safety:    Two-stage guardrails (inherited)
-    - Logging:   SQLite + JSONL (inherited)
-
-    Cost & Latency (HF Free Tier, Qwen2.5-0.5B-Instruct)
-    -------------------------------------------------------
-    | Metric          | Value (approx)                    |
-    |-----------------|-----------------------------------|
-    | Cost            | $0 (free tier) / ~$0.06 per 1M   |
-    |                 | tokens (serverless pay-as-you-go) |
-    | Cold-start      | 10–30 s (first request)           |
-    | Warm latency    | 1–5 s (p50), 5–15 s (p95)         |
-    | Max context     | 4 096 tokens                      |
-    | Throughput      | ~50–200 tok/s (serverless)        |
-    """
 
     MODEL_TYPE = "oss"
     MODEL_NAME: str = config.OSS_MODEL_ID
 
+    _tokenizer = None
+    _model = None
+
     def __init__(self, session_id: Optional[str] = None):
         super().__init__(session_id)
-        self._api_url = config.OSS_API_URL
-        self._headers = config.oss_headers
-        self._timeout = 60  # seconds — serverless cold-start can be slow
+
+        if OSSAssistant._tokenizer is None:
+            print(f"Loading model: {self.MODEL_NAME}")
+
+            OSSAssistant._tokenizer = AutoTokenizer.from_pretrained(
+                self.MODEL_NAME
+            )
+
+            OSSAssistant._model = AutoModelForCausalLM.from_pretrained(
+                self.MODEL_NAME,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                device_map="auto",
+            )
+
+            print("Model loaded successfully.")
+
+    @property
+    def tokenizer(self):
+        return OSSAssistant._tokenizer
+
+    @property
+    def model(self):
+        return OSSAssistant._model
 
     def _generate_response(self) -> str:
         messages = self.memory.get_messages()
 
-        payload = {
-            "model": config.OSS_MODEL_ID,
-            "messages": messages,
-            "max_tokens": config.OSS_MAX_TOKENS,
-            "temperature": config.OSS_TEMPERATURE,
-            "stream": False,
-        }
+        t0 = time.perf_counter()
 
         try:
-            resp = requests.post(
-                self._api_url,
-                headers=self._headers,
-                json=payload,
-                timeout=self._timeout,
-            )
-        except requests.exceptions.Timeout:
-            raise RuntimeError(
-                "HuggingFace Inference API timed out. "
-                "The model may be cold-starting — please wait 20–30 seconds and retry."
-            )
-        except requests.exceptions.ConnectionError as exc:
-            raise RuntimeError(f"Network error connecting to HF API: {exc}")
-
-        if resp.status_code == 503:
-            raise RuntimeError(
-                "Model is loading (cold start). "
-                "HF free-tier models sleep after inactivity. "
-                "Please retry in 20–30 seconds."
+            prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
             )
 
-        if resp.status_code == 401:
-            raise RuntimeError(
-                "HuggingFace API token is invalid or missing. "
-                "Set HF_API_TOKEN in your .env file."
+            inputs = self.tokenizer(
+                prompt,
+                return_tensors="pt",
+            ).to(self.model.device)
+
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=config.OSS_MAX_TOKENS,
+                temperature=config.OSS_TEMPERATURE,
+                do_sample=True,
+                top_p=0.9,
+                repetition_penalty=1.1,
             )
 
-        if resp.status_code != 200:
-            raise RuntimeError(
-                f"HF Inference API error {resp.status_code}: {resp.text[:200]}"
+            generated_tokens = outputs[0][inputs.input_ids.shape[-1]:]
+
+            text = self.tokenizer.decode(
+                generated_tokens,
+                skip_special_tokens=True,
             )
 
-        data = resp.json()
+            elapsed = (time.perf_counter() - t0) * 1000
 
-        # OpenAI-compatible response format
-        try:
-            return data["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError) as exc:
-            raise RuntimeError(
-                f"Unexpected response format from HF API: {exc}. "
-                f"Raw: {str(data)[:300]}"
-            )
+            print(f"OSS latency: {elapsed:.0f} ms")
+
+            return text.strip()
+
+        except Exception as exc:
+            raise RuntimeError(f"OSS model generation failed: {exc}")
 
     def warmup(self) -> str:
-        """
-        Send a cheap warmup request to trigger model loading.
-        Returns status message.
-        """
-        if not config.HF_API_TOKEN:
-            return " HF_API_TOKEN not set — OSS model will not work."
         try:
             t0 = time.perf_counter()
-            resp = requests.post(
-                self._api_url,
-                headers=self._headers,
-                json={
-                    "model": config.OSS_MODEL_ID,
-                    "messages": [{"role": "user", "content": "Hi"}],
-                    "max_tokens": 10,
-                },
-                timeout=45,
+
+            prompt = self.tokenizer.apply_chat_template(
+                [{"role": "user", "content": "Hi"}],
+                tokenize=False,
+                add_generation_prompt=True,
             )
+
+            inputs = self.tokenizer(
+                prompt,
+                return_tensors="pt",
+            ).to(self.model.device)
+
+            _ = self.model.generate(
+                **inputs,
+                max_new_tokens=10,
+            )
+
             elapsed = (time.perf_counter() - t0) * 1000
-            if resp.status_code == 200:
-                return f" OSS model ready ({elapsed:.0f} ms)"
-            return f" Warmup HTTP {resp.status_code}: {resp.text[:100]}"
+
+            return f"OSS model ready ({elapsed:.0f} ms)"
+
         except Exception as exc:
-            return f" Warmup failed: {exc}"
+            return f"Warmup failed: {exc}"
