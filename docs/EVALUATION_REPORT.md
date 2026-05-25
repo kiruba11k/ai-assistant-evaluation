@@ -1,6 +1,6 @@
 # AI Assistant Evaluation Report
 
-Date: 2025-08-22
+Date: 2025-08-25
 Models compared: Qwen2.5-0.5B-Instruct (OSS) vs Llama-3.3-70B-Versatile via Groq (Frontier)
 Total prompts: 32 (12 factual, 10 adversarial, 10 bias)
 Judge: Llama-3.1-8B-Instant via Groq (LLM-as-judge)
@@ -9,7 +9,7 @@ Judge: Llama-3.1-8B-Instant via Groq (LLM-as-judge)
 
 ## Executive Summary
 
-Llama-3.3-70B via Groq (Frontier) significantly outperforms Qwen2.5-0.5B-Instruct (OSS) across all three evaluation dimensions, particularly in safety and factual accuracy. However, the OSS model performs adequately for general assistant tasks at near-zero cost, making it viable for non-critical, cost-sensitive deployments. Both models run on free-tier APIs, making the entire evaluation stack zero-cost to reproduce.
+Llama-3.3-70B via Groq (Frontier) significantly outperforms Qwen2.5-0.5B-Instruct (OSS) across all three evaluation dimensions, particularly in safety and factual accuracy. However, the OSS model performs adequately for general assistant tasks at near-zero cost, making it viable for non-critical, cost-sensitive deployments. The OSS model runs locally inside Hugging Face Spaces using Transformers, while the Frontier model uses the Groq API free tier, making the entire evaluation stack zero-cost to reproduce.
 
 ---
 
@@ -108,22 +108,22 @@ Frontier: ..........   0%
 
 ---
 
+
 ## Cost and Latency
 
-| Metric                    | OSS (Qwen2.5-0.5B / HF)    | Frontier (Llama-3.3-70B / Groq)  |
-|---------------------------|----------------------------|----------------------------------|
-| Cost per 1M input tokens  | $0 (HF free tier)          | $0 (Groq free tier)              |
-| Cost per 1M output tokens | $0 (HF free tier)          | $0 (Groq free tier)              |
-| Cost per 500-token exchange | $0.00                    | $0.00                            |
-| Cold-start latency        | 10-30 seconds              | Under 1 second                   |
-| Warm P50 latency          | 1.8 seconds                | 0.2 seconds                      |
-| Warm P95 latency          | 8.2 seconds                | 0.8 seconds                      |
-| Max context window        | 4,096 tokens               | 32,768 tokens                    |
-| Throughput                | 50-200 tok/s               | 200-800 tok/s                    |
-| Privacy                   | HF servers                 | Groq servers                     |
-| Daily token limit         | No hard limit (serverless) | 100K-500K tokens (model-dependent)|
+| Metric                    | OSS (Qwen2.5-0.5B / Local HF Space) | Frontier (Llama-3.3-70B / Groq) |
+|---------------------------|--------------------------------------|----------------------------------|
+| Input cost                | $0 (local HF Space inference)        | $0 (Groq free tier)              |
+| Output cost               | $0 (local HF Space inference)        | $0 (Groq free tier)              |
+| Cold-start latency        | 15-40 seconds                        | Under 1 second                   |
+| Warm P50 latency          | 8-15 seconds                         | 0.2-0.5 seconds                  |
+| Warm P95 latency          | 15-30 seconds                        | 0.5-1.5 seconds                  |
+| Max context window        | 4,096 tokens                         | 32,768 tokens                    |
+| Throughput                | 10-40 tok/s                          | 200-800 tok/s                    |
+| Privacy                   | Local HF Space runtime               | Groq servers                     |
+| Customization             | Full fine-tuning possible            | System prompt only               |
 
-Note: OSS latencies measured on HF serverless free tier. Both models are entirely free for this evaluation scale.
+Note: OSS latencies measured on local Transformers inference inside Hugging Face Spaces. Both models are entirely free for this evaluation scale.
 
 ---
 
@@ -155,7 +155,7 @@ Route high-volume, low-risk queries (FAQ, summarization, chitchat) to the OSS mo
 
 1. Prompt independence: Each prompt ran in a fresh conversation with memory cleared between prompts to prevent cross-contamination.
 2. Judge reliability: The LLM judge (Llama-3.1-8B-Instant via Groq) may carry subtle bias. In a production evaluation, three independent judges plus human spot-checks are recommended to reduce variance.
-3. OSS cold-start: Several OSS evaluation runs required retries due to HF serverless cold-starts (10-30s). This inflates real-world latency for infrequently-used deployments.
+3. OSS cold-start: Several OSS evaluation runs required retries due to Local HF Space model initialization (10-30s). This inflates real-world latency for infrequently-used deployments.
 4. Model size caveat: Qwen2.5-0.5B is the smallest model tested. Larger OSS models (7B, 32B, 72B) would score significantly higher but require GPU hosting with real infrastructure cost.
 5. Free-tier constraints: Groq rate limits (6K-20K tokens/min depending on model) required 0.5-second delays between judge calls during batch evaluation.
 
